@@ -21,6 +21,12 @@ import (
 	"github.com/go-chi/render"
 )
 
+// PostLoginJSONBody defines parameters for PostLogin.
+type PostLoginJSONBody struct {
+	Password *string `json:"password,omitempty"`
+	Username *string `json:"username,omitempty"`
+}
+
 // PostUserJSONBody defines parameters for PostUser.
 type PostUserJSONBody struct {
 	Email *string `json:"email,omitempty"`
@@ -30,6 +36,14 @@ type PostUserJSONBody struct {
 // PutUserUUIDJSONBody defines parameters for PutUserUUID.
 type PutUserUUIDJSONBody struct {
 	Name *string `json:"name,omitempty"`
+}
+
+// PostLoginJSONRequestBody defines body for PostLogin for application/json ContentType.
+type PostLoginJSONRequestBody PostLoginJSONBody
+
+// Bind implements render.Binder.
+func (PostLoginJSONRequestBody) Bind(*http.Request) error {
+	return nil
 }
 
 // PostUserJSONRequestBody defines body for PostUser for application/json ContentType.
@@ -87,6 +101,26 @@ func (resp *Response) MarshalJSON() ([]byte, error) {
 // This is used to only marshal the body of the response.
 func (resp *Response) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.Encode(resp.body)
+}
+
+// PostLoginJSON200Response is a constructor method for a PostLogin response.
+// A *Response is returned with the configured status code and content type from the spec.
+func PostLoginJSON200Response(body struct {
+	AccessToken  *string `json:"accessToken,omitempty"`
+	Message      *string `json:"message,omitempty"`
+	RefreshToken *string `json:"refreshToken,omitempty"`
+	Status       *string `json:"status,omitempty"`
+	User         *struct {
+		Email    *string `json:"email,omitempty"`
+		Name     *string `json:"name,omitempty"`
+		UserUUID *string `json:"user_uuid,omitempty"`
+	} `json:"user,omitempty"`
+}) *Response {
+	return &Response{
+		body:        body,
+		Code:        200,
+		contentType: "application/json",
+	}
 }
 
 // GetUserJSON200Response is a constructor method for a GetUser response.
@@ -147,6 +181,9 @@ func PutUserUUIDJSON200Response(body struct {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// User login
+	// (POST /login)
+	PostLogin(w http.ResponseWriter, r *http.Request) *Response
 	// Get a list of users
 	// (GET /user)
 	GetUser(w http.ResponseWriter, r *http.Request) *Response
@@ -168,6 +205,24 @@ type ServerInterface interface {
 type ServerInterfaceWrapper struct {
 	Handler          ServerInterface
 	ErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, err error)
+}
+
+// PostLogin operation middleware
+func (siw *ServerInterfaceWrapper) PostLogin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := siw.Handler.PostLogin(w, r)
+		if resp != nil {
+			if resp.body != nil {
+				render.Render(w, r, resp)
+			} else {
+				w.WriteHeader(resp.Code)
+			}
+		}
+	})
+
+	handler(w, r.WithContext(ctx))
 }
 
 // GetUser operation middleware
@@ -399,6 +454,7 @@ func Handler(si ServerInterface, opts ...ServerOption) http.Handler {
 	}
 
 	r.Route(options.BaseURL, func(r chi.Router) {
+		r.Post("/login", wrapper.PostLogin)
 		r.Get("/user", wrapper.GetUser)
 		r.Post("/user", wrapper.PostUser)
 		r.Delete("/user/{uuid}", wrapper.DeleteUserUUID)
@@ -429,14 +485,15 @@ func WithErrorHandler(handler func(w http.ResponseWriter, r *http.Request, err e
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+RUTWsbMRD9K2LOS+y2t721DRRDC7n4VHpQpLGjsPqoZpSyLPrvZbSYuPbWpaQYSk4S",
-	"o/l6741mAhN9igEDE/RT7cCFXYR+AnY8IPSwJczqiw56jx4Dq/d3G+jgCTO5GKCHNzfrmzXUDmLCoJOD",
-	"Ht41UwdJ84NkhVUhzHLZI8sRE2bNLoaNhR4+IUsR6CAjpRgIW9Db9VoOEwNjaGE6pcGZFrh6JKk+AZkH",
-	"9FpujtG3wJQlP7s5DXrthgZoTIKHOLuwl4aD9rj4UIqzCw+1O1ji/SMahmeDzlmPUMXFIpnsEs/sfHbE",
-	"Ku6UEEAtBRXvdR5n3Eqr4VePDlKkBZLuIj2z9L0g8Ydox78i6IW8nMMXkzTjMlroOResL9TwetKdS9UG",
-	"3WTUjFZRMQaJdmUYxhPZPjYXpVXAH0219t5GfDVJ/SoNWByQ8VzH22aXWtvt5rZ9kqw9sojff53ASSvy",
-	"ceCAcsZ0ynR3xNop2G/LKizAnbu8CHduuAFV96NqXdfu4k++OrL/Z74ssnYDqYycHT5dpl4WRDmOOuI/",
-	"laUlUa7B/7/YPq95xxzULMn+addsm8tvhqDW+jMAAP//1FwjH78HAAA=",
+	"H4sIAAAAAAAC/+RUX2/TQAz/Kic/R2uBt7wBk6ZKIO2BPiGEvMRtbyR3x9m3Kary3dE5yihtWoZWKiGe",
+	"Evlsn39/zluofBu8IycM5bYvwLqVh3ILYqUhKGHJFM1HdLimlpyYt7cLKOCBIlvvoIRXV/OrOfQF+EAO",
+	"g4US3miogICyyV1h1vi1dfkveJb89YEiivVuUUMJt57lg6YUEOl7IpZ3vu5yYuWdkNMaDKGxlVbN7tlr",
+	"P6421KJ2jrmnWNIbAzI/+lgrki5kICzRunWeNDFFhy1NHPbFGPF391QJ9DmUZ7KRaiglJtIAB+94uOv1",
+	"fP6CSbGqiPmT/0ZuctiWmHFNk2eRVpF4c7yYBSXxURIOp6EWbTOZf4SwodHXlGz9PDonCa6Jq2iDDJZS",
+	"KxhOyswqNVrFqW0xdqMjB0flg9mIZE0T1rohyfnwQs2sUMvnoeu5TD0FMEbsJnmyLMavTCaA90i6ITFo",
+	"ml8zihPv74mlczy/P+bl8u/ub0p3KJV6toqEQvWOs5tuT7b3mmLQOHpU1X5afLbN9/d5gJoaEjrU8Vrj",
+	"+a7lcnGtGzhiS5LFLz9vIe9g3cowohww7TNd7LC2D/bLtAoTcIcpT8IdBlag5q4zOnVfnHzJF0f27/ir",
+	"JkHbsIkk0dLDaerzgki7VTv8hzS1JNIl+D/H9vmfd8yoZgr173bNUlOOmKDv+x8BAAD//4cbJ6ccCgAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
