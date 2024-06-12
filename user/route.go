@@ -1,8 +1,11 @@
 package user
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 
+	"github.com/SuNNjek/identity"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/jinzhu/copier"
@@ -73,7 +76,24 @@ func (h Handle) PutUserUUID(w http.ResponseWriter, r *http.Request, uuid string)
 	return nil
 }
 
+func validatePassword(password string, enteredPassword string) bool {
+	pw, err := base64.StdEncoding.DecodeString(password)
+	if err != nil {
+		return false
+	}
+	return identity.Verify(pw, []byte(enteredPassword))
+}
+
 func (h Handle) PostLogin(w http.ResponseWriter, r *http.Request) *Response {
+	var loginReq PostLoginJSONBody
+	err := json.NewDecoder(r.Body).Decode(&loginReq)
+	if err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return nil
+	}
+	// get user password
+
+	// validate password
 	return nil
 }
 
