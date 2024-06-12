@@ -114,3 +114,42 @@ paths:
       responses:
         '200':
           description: User deleted successfully
+  /login:
+    post:
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  refreshToken:
+                    type: string
+                  accessToken:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      user_uuid:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
