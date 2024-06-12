@@ -73,6 +73,10 @@ func (h Handle) PutUserUUID(w http.ResponseWriter, r *http.Request, uuid string)
 	return nil
 }
 
+func (h Handle) PostLogin(w http.ResponseWriter, r *http.Request) *Response {
+	return nil
+}
+
 func Routes(r *chi.Mux, handle Handle) {
 
 	r.Group(func(r chi.Router) {
